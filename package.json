@@ -1,0 +1,24 @@
+{
+  "name": "merkle-mine",
+  "version": "1.0.0",
+  "main": "truffle.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "clean": "rm -rf build",
+    "compile": "truffle compile --all",
+    "test": "truffle test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bignumber.js": "^6.0.0",
+    "ethereumjs-util": "^5.1.5",
+    "truffle": "^4.1.5",
+    "zeppelin-solidity": "1.8.0"
+  },
+  "devDependencies": {},
+  "description": ""
+}
