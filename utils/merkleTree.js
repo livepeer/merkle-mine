@@ -6,11 +6,11 @@ const { sha3, bufferToHex } = require("ethereumjs-util")
 
 module.exports = class MerkleTree {
     constructor (elements) {
-        // Filter empty strings and hash elements
-        this.elements = elements.filter(el => el).map(el => sha3(el))
+        // Filter empty strings and retain unique elements only
+        this.elements = [...new Set(elements.filter(el => el))]
+        // Hash elements
+        this.elements = this.elements.map(el => sha3(el))
 
-        // Deduplicate elements
-        this.elements = this.bufDedup(this.elements)
         // Sort elements
         this.elements.sort(Buffer.compare)
 
@@ -113,12 +113,6 @@ module.exports = class MerkleTree {
         }
 
         return -1
-    }
-
-    bufDedup (elements) {
-        return elements.filter((el, idx) => {
-            return this.bufIndexOf(el, elements) === idx
-        })
     }
 
     bufArrToHex (arr) {
