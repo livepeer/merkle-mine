@@ -19,6 +19,8 @@ contract MerkleMine {
     uint256 public totalGenesisTokens;
     // Total number of recipients included in genesis state
     uint256 public totalGenesisRecipients;
+    // Amount of tokens per recipient allocation. Equal to `totalGenesisTokens` / `totalGenesisRecipients`
+    uint256 public tokensPerAllocation;
     // Minimum ETH balance threshold for recipients included in genesis state
     uint256 public balanceThreshold;
     // Block number of genesis - used to determine which ETH accounts are included in the genesis state
@@ -67,7 +69,7 @@ contract MerkleMine {
         require(_token != address(0));
         // Number of recipients must be non-zero
         require(_totalGenesisRecipients > 0);
-        // Genesis block must be before the current block
+        // Genesis block must be at or before the current block
         require(_genesisBlock <= block.number);
         // Start block for caller allocation must be after current block
         require(_callerAllocationStartBlock > block.number);
@@ -78,6 +80,7 @@ contract MerkleMine {
         genesisRoot = _genesisRoot;
         totalGenesisTokens = _totalGenesisTokens;
         totalGenesisRecipients = _totalGenesisRecipients;
+        tokensPerAllocation = _totalGenesisTokens.div(_totalGenesisRecipients);
         balanceThreshold = _balanceThreshold;
         genesisBlock = _genesisBlock;
         callerAllocationStartBlock = _callerAllocationStartBlock;
@@ -85,7 +88,7 @@ contract MerkleMine {
     }
 
     /**
-     * @dev Generate a recipient's token allocation. Starting from `callerAllocationStartBlock`
+     * @dev Generate a recipient's token allocation. Generation process must be started. Starting from `callerAllocationStartBlock`
      * a third party caller (not the recipient) can invoke this function to generate the recipient's token
      * allocation and claim a percentage of it. The percentage of the allocation claimed by the
      * third party caller is determined by how many blocks have elapsed since `callerAllocationStartBlock`.
@@ -93,7 +96,7 @@ contract MerkleMine {
      * @param _recipient Recipient of token allocation
      * @param _merkleProof Proof of recipient's inclusion in genesis state Merkle root
      */
-    function generate(address _recipient, bytes _merkleProof) external notGenerated(_recipient) {
+    function generate(address _recipient, bytes _merkleProof) external isStarted notGenerated(_recipient) {
         // Check the Merkle proof
         bytes32 leaf = keccak256(_recipient);
         // _merkleProof must prove inclusion of _recipient in the genesis state root
@@ -105,16 +108,16 @@ contract MerkleMine {
 
         if (caller == _recipient) {
             // If the caller is the recipient, transfer the full allocation to the caller/recipient
-            token.transfer(_recipient, tokensPerAllocation());
+            token.transfer(_recipient, tokensPerAllocation);
 
-            emit Generate(_recipient, _recipient, tokensPerAllocation(), 0, block.number);
+            emit Generate(_recipient, _recipient, tokensPerAllocation, 0, block.number);
         } else {
             // If the caller is not the recipient, the token allocation generation
             // can only take place if we are in the caller allocation period
             require(block.number >= callerAllocationStartBlock);
 
             uint256 callerTokenAmount = callerTokenAmountAtBlock(block.number);
-            uint256 recipientTokenAmount = tokensPerAllocation().sub(callerTokenAmount);
+            uint256 recipientTokenAmount = tokensPerAllocation.sub(callerTokenAmount);
 
             if (callerTokenAmount > 0) {
                 token.transfer(caller, callerTokenAmount);
@@ -129,23 +132,23 @@ contract MerkleMine {
     }
 
     /**
-     * @dev Return amount of tokens per allocation (for a recipient)
-     */
-    function tokensPerAllocation() public view returns (uint256) {
-        return totalGenesisTokens.div(totalGenesisRecipients);
-    }
-
-    /**
      * @dev Return the amount of tokens claimable by a third party caller when generating a recipient's token allocation at a given block
      * @param _blockNumber Block at which to compute the amount of tokens claimable by a third party caller
      */
-    function callerTokenAmountAtBlock(uint256 _blockNumber) internal view returns (uint256) {
-        if (_blockNumber >= callerAllocationEndBlock) {
-            return tokensPerAllocation();
+    function callerTokenAmountAtBlock(uint256 _blockNumber) public view returns (uint256) {
+        if (_blockNumber < callerAllocationStartBlock) {
+            // If the block is before the start of the caller allocation period, the third party caller can claim nothing
+            return 0;
+        } else if (_blockNumber >= callerAllocationEndBlock) {
+            // If the block is at or after the end block of the caller allocation period, the third party caller can claim everything
+            return tokensPerAllocation;
         } else {
+            // During the caller allocation period, the third party caller can claim an increasing percentage
+            // of the recipient's allocation based on a linear curve - as more blocks pass in the caller allocation
+            // period, the amount claimable by the third party caller increases linearly
             uint256 blocksSinceCallerAllocationStartBlock = _blockNumber.sub(callerAllocationStartBlock);
             uint256 callerAllocationPeriod = callerAllocationEndBlock.sub(callerAllocationStartBlock);
-            return tokensPerAllocation().mul(blocksSinceCallerAllocationStartBlock).div(callerAllocationPeriod);
+            return tokensPerAllocation.mul(blocksSinceCallerAllocationStartBlock).div(callerAllocationPeriod);
         }
     }
 }
