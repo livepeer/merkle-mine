@@ -209,7 +209,7 @@ contract("MerkleMine", accounts => {
             await expectThrow(merkleMine.start())
         })
 
-        it("should fail if genesis process is already started", async () => {
+        it("should fail if genesis period is already started", async () => {
             await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
             await merkleMine.start()
 
@@ -225,14 +225,14 @@ contract("MerkleMine", accounts => {
     })
 
     describe("generate", () => {
-        describe("generation process is not started", () => {
-            it("should fail if generation process is not started", async () => {
+        describe("generation period is not started", () => {
+            it("should fail if generation period is not started", async () => {
                 await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
                 await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0])), {from: accounts[0]})
             })
         })
 
-        describe("generation process is started", () => {
+        describe("generation period is started", () => {
             beforeEach(async () => {
                 await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
                 await merkleMine.start()
@@ -411,15 +411,25 @@ contract("MerkleMine", accounts => {
                     })
                 })
 
-                describe("current block is after the end block", () => {
-                    it("should transfer the full allocation to the caller", async () => {
+                describe("current block is at or after callerAllocationEndBlock", () => {
+                    it("should transfer the full allocation to the caller if current block > callerAllocationEndBlock", async () => {
+                        const callerAllocationEndBlock = await merkleMine.callerAllocationEndBlock.call()
+                        await rpc.waitUntilBlock(callerAllocationEndBlock.toNumber() + 1)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        assert.equal(await token.balanceOf(accounts[0]), 0, "should not transfer any tokens to recipient")
+                        assert.equal(await token.balanceOf(accounts[1]), TOKENS_PER_ALLOCATION, "should transfer full allocation to caller")
+                    })
+
+                    it("should transfer the full allocation to the caller if current block == callerAllocationEndBlock", async () => {
                         const callerAllocationEndBlock = await merkleMine.callerAllocationEndBlock.call()
                         await rpc.waitUntilBlock(callerAllocationEndBlock.toNumber())
 
                         await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
 
                         assert.equal(await token.balanceOf(accounts[0]), 0, "should not transfer any tokens to recipient")
-                        assert.equal(await token.balanceOf(accounts[1]), Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS), "should transfer full allocation to caller")
+                        assert.equal(await token.balanceOf(accounts[1]), TOKENS_PER_ALLOCATION, "should transfer full allocation to caller")
                     })
                 })
             })

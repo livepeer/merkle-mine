@@ -43,13 +43,13 @@ contract MerkleMine {
         _;
     }
 
-    // Check that the generation process is started
+    // Check that the generation period is started
     modifier isStarted() {
         require(started);
         _;
     }
 
-    // Check that the generation process is not started
+    // Check that the generation period is not started
     modifier isNotStarted() {
         require(!started);
         _;
@@ -103,17 +103,18 @@ contract MerkleMine {
     }
 
     /**
-     * @dev Start the generation process - first checks that this contract's balance is equal to `totalGenesisTokens`
-     * The generation process must not already be started
+     * @dev Start the generation period - first checks that this contract's balance is equal to `totalGenesisTokens`
+     * The generation period must not already be started
      */
     function start() external isNotStarted {
+        // Check that this contract has a sufficient balance for the generation period
         require(token.balanceOf(this) == totalGenesisTokens);
 
         started = true;
     }
 
     /**
-     * @dev Generate a recipient's token allocation. Generation process must be started. Starting from `callerAllocationStartBlock`
+     * @dev Generate a recipient's token allocation. Generation period must be started. Starting from `callerAllocationStartBlock`
      * a third party caller (not the recipient) can invoke this function to generate the recipient's token
      * allocation and claim a percentage of it. The percentage of the allocation claimed by the
      * third party caller is determined by how many blocks have elapsed since `callerAllocationStartBlock`.
