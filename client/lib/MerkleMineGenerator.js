@@ -42,6 +42,15 @@ module.exports = class MerkleMineGenerator {
         console.log(`Validated locally generated Merkle root ${localRoot} with Merkle root stored in MerkleMine contract!`)
     }
 
+    async checkStarted() {
+        const merkleMine = await this.getMerkleMine()
+        const started = await merkleMine.methods.started().call()
+
+        if (!started) {
+            throw new Error(`Generation period has not started for MerkleMine contract`)
+        }
+    }
+
     async checkGenerated() {
         const merkleMine = await this.getMerkleMine()
         const generated = await merkleMine.methods.generated(this.recipientAddress).call()

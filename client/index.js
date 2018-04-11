@@ -33,11 +33,12 @@ const main = async () => {
     await txKeyManager.unlock(password)
     console.log(`Unlocked caller account ${argv.caller}`)
 
-    const miner = new MerkleMineGenerator(provider, txKeyManager, argv.merkleMine, argv.recipient, argv.caller, argv.gasPrice)
-    await miner.makeTree(argv.acctFile)
-    await miner.validateRoot()
-    await miner.checkGenerated()
-    await miner.submitProof()
+    const gen = new MerkleMineGenerator(provider, txKeyManager, argv.merkleMine, argv.recipient, argv.caller, argv.gasPrice)
+    await gen.makeTree(argv.acctFile)
+    await gen.validateRoot()
+    await gen.checkStarted()
+    await gen.checkGenerated()
+    await gen.submitProof()
 }
 
 try {
