@@ -1,6 +1,7 @@
 const fs = require("fs")
 const { promisify } = require("util")
 const Web3 = require("web3")
+const ethUtil = require("ethereumjs-util")
 const MerkleTree = require("../../utils/merkleTree.js")
 const MerkleMineArtifact = require("./artifacts/MerkleMine.json")
 
@@ -18,13 +19,13 @@ module.exports = class MerkleMineGenerator {
     async makeTree(accountsFile) {
         const file = await promisify(fs.readFile)(accountsFile)
 
-        let accounts = JSON.parse(file)
-        // Make sure all accounts are lowercased
-        accounts = accounts.map(acct => acct.toLowerCase())
+        const accounts = JSON.parse(file)
+        // Sort accounts based on their hex bytes value
+        const sortedAccounts = accounts.map(acct => ethUtil.toBuffer(acct)).sort(Buffer.compare)
 
         console.log(`Creating Merkle tree with accounts in file: ${accountsFile}`)
 
-        this.merkleTree = new MerkleTree(accounts)
+        this.merkleTree = new MerkleTree(sortedAccounts)
 
         console.log(`Created Merkle tree with root ${this.merkleTree.getHexRoot()}`)
     }

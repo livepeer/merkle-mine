@@ -1,4 +1,5 @@
 const expectThrow = require("./helpers/expectThrow")
+const ethUtil = require("ethereumjs-util")
 const RPC = require("./helpers/rpc")
 const MerkleTree = require("../utils/merkleTree.js")
 
@@ -183,7 +184,8 @@ contract("MerkleMine", accounts => {
         callerAllocationEndBlock = web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + CALLER_ALLOCATION_PERIOD + 1
 
         token = await TestToken.new()
-        merkleTree = new MerkleTree(accounts.map(acct => acct.toLowerCase()))
+        const sortedAccounts = accounts.map(acct => ethUtil.toBuffer(acct)).sort(Buffer.compare)
+        merkleTree = new MerkleTree(sortedAccounts)
         merkleMine = await MerkleMine.new(
             token.address,
             merkleTree.getHexRoot(),

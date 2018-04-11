@@ -11,9 +11,6 @@ module.exports = class MerkleTree {
         // Hash elements
         this.elements = this.elements.map(el => sha3(el))
 
-        // Sort elements
-        this.elements.sort(Buffer.compare)
-
         // Create layers
         this.layers = this.getLayers(this.elements)
     }
