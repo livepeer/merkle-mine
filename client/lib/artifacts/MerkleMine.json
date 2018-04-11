@@ -4,6 +4,20 @@
         {
             "constant": true,
             "inputs": [],
+            "name": "started",
+            "outputs": [
+                {
+                    "name": "",
+                    "type": "bool"
+                }
+            ],
+            "payable": false,
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "constant": true,
+            "inputs": [],
             "name": "genesisBlock",
             "outputs": [
                 {
@@ -38,6 +52,20 @@
             "constant": true,
             "inputs": [],
             "name": "totalGenesisTokens",
+            "outputs": [
+                {
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "payable": false,
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "constant": true,
+            "inputs": [],
+            "name": "tokensPerAllocation",
             "outputs": [
                 {
                     "name": "",
@@ -205,6 +233,15 @@
         },
         {
             "constant": false,
+            "inputs": [],
+            "name": "start",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
             "inputs": [
                 {
                     "name": "_recipient",
@@ -223,8 +260,13 @@
         },
         {
             "constant": true,
-            "inputs": [],
-            "name": "tokensPerAllocation",
+            "inputs": [
+                {
+                    "name": "_blockNumber",
+                    "type": "uint256"
+                }
+            ],
+            "name": "callerTokenAmountAtBlock",
             "outputs": [
                 {
                     "name": "",
