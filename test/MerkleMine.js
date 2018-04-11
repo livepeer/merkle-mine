@@ -161,6 +161,7 @@ contract("MerkleMine", accounts => {
 
     const TOTAL_GENESIS_TOKENS = 10000000
     const TOTAL_GENESIS_RECIPIENTS = accounts.length
+    const TOKENS_PER_ALLOCATION = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
     const BALANCE_THRESHOLD = 1000
     const BLOCKS_TO_CALLER_CLIFF = 10
     const CALLER_ALLOCATION_PERIOD = 100
@@ -172,8 +173,14 @@ contract("MerkleMine", accounts => {
     let merkleMine
     let merkleTree
 
+    let callerAllocationStartBlock
+    let callerAllocationEndBlock
+
     before(async () => {
         rpc = new RPC(web3)
+
+        callerAllocationStartBlock = web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + 1
+        callerAllocationEndBlock = web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + CALLER_ALLOCATION_PERIOD + 1
 
         token = await TestToken.new()
         merkleTree = new MerkleTree(accounts.map(acct => acct.toLowerCase()))
@@ -184,11 +191,9 @@ contract("MerkleMine", accounts => {
             TOTAL_GENESIS_RECIPIENTS,
             BALANCE_THRESHOLD,
             web3.eth.blockNumber,
-            web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + 1,
-            web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + CALLER_ALLOCATION_PERIOD + 1
+            callerAllocationStartBlock,
+            callerAllocationEndBlock,
         )
-
-        await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
     })
 
     beforeEach(async () => {
@@ -199,209 +204,333 @@ contract("MerkleMine", accounts => {
         await rpc.revert(snapshotId)
     })
 
+    describe("start", () => {
+        it("should fail if the contract does not have a balance == totalGenesisTokens", async () => {
+            await expectThrow(merkleMine.start())
+        })
+
+        it("should fail if genesis process is already started", async () => {
+            await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
+            await merkleMine.start()
+
+            await expectThrow(merkleMine.start())
+        })
+
+        it("should set started = true if the contract has a balance == totalGenesisTokens", async () => {
+            await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
+            await merkleMine.start()
+
+            assert.isOk(await merkleMine.started.call(), "should set started = true")
+        })
+    })
+
     describe("generate", () => {
-        it("should fail if Merkle proof is invalid", async () => {
-            await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[1])), {from: accounts[0]})
+        describe("generation process is not started", () => {
+            it("should fail if generation process is not started", async () => {
+                await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
+                await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0])), {from: accounts[0]})
+            })
         })
 
-        it("should fail if recipient's allocation has already been generated", async () => {
-            await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
-
-            await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0])), {from: accounts[0]})
-        })
-
-        describe("recipient == caller", () => {
-            it("should transfer the full allocation to the recipient and set recipient allocation as generated", async () => {
-                await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
-
-                assert.isOk(await merkleMine.generated.call(accounts[0]), "should set recipient allocation as generated")
-                assert.equal(
-                    await token.balanceOf(accounts[0]),
-                    Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS),
-                    "should update recipient's balance with full allocation"
-                )
+        describe("generation process is started", () => {
+            beforeEach(async () => {
+                await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS)
+                await merkleMine.start()
             })
 
-            it("should emit Generate event with correct fields", async () => {
-                let e = merkleMine.Generate({})
-                e.watch(async (err, result) => {
-                    e.stopWatching()
+            it("should fail if Merkle proof is invalid", async () => {
+                await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[1])), {from: accounts[0]})
+            })
 
-                    assert.equal(result.args._recipient, accounts[0], "should set recipient")
-                    assert.equal(result.args._caller, accounts[0], "should set caller = recipient")
+            it("should fail if recipient's allocation has already been generated", async () => {
+                await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
+
+                await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0])), {from: accounts[0]})
+            })
+
+            describe("recipient == caller", () => {
+                it("should transfer the full allocation to the recipient and set recipient allocation as generated", async () => {
+                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
+
+                    assert.isOk(await merkleMine.generated.call(accounts[0]), "should set recipient allocation as generated")
                     assert.equal(
-                        result.args._recipientTokenAmount,
-                        Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS),
-                        "should set recipient token amount to full allocation"
+                        await token.balanceOf(accounts[0]),
+                        TOKENS_PER_ALLOCATION,
+                        "should update recipient's balance with full allocation"
                     )
-                    assert.equal(result.args._callerTokenAmount, 0, "should set caller token amount to 0")
-                    assert.equal(result.args._block, web3.eth.blockNumber, "should set block to current block")
-                })
-
-                await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
-            })
-        })
-
-        describe("recipient != caller", () => {
-            it("should fail if we are not in caller allocation period", async () => {
-                await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]}))
-            })
-
-            it("should set recipient allocation as generated", async () => {
-                await rpc.waitUntilBlock(web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF - 1)
-
-                await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                assert.isOk(await merkleMine.generated.call(accounts[0]), "should set recipient allocation as generated")
-            })
-
-            describe("current block >= callerAllocationStartBlock and current block < callerAllocationEndBlock", () => {
-                beforeEach(async () => {
-                    // Fast forward to caller allocation period
-                    await rpc.waitUntilBlock(web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF - 2)
-                })
-
-                it("should split the allocation 100:0 (recipient:caller) when current block == callerAllocationStartBlock", async () => {
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    assert.equal(await token.balanceOf(accounts[0]), Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS), "recipient should receive 100% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), 0, "caller should receive 0% of allocation")
-                })
-
-                it("should split the allocation 90:10 (recipient:caller) when a tenth way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .1)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .9)
-                    const callerTokens = Math.floor(tokensPerAllocation * .1)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 90% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 10% of allocation")
-                })
-
-                it("should split the allocation 75:25 (recipient:caller) when a quarter way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .25)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .75)
-                    const callerTokens = Math.floor(tokensPerAllocation * .25)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 75% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 25% of allocation")
-                })
-
-                it("should split the allocation 60:40 (recipient:caller) when a third way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .4)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .6)
-                    const callerTokens = Math.floor(tokensPerAllocation * .4)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 60% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 40% of allocation")
-                })
-
-                it("should split the allocation 50:50 (recipient:caller) when halfway through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .5)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .5)
-                    const callerTokens = Math.floor(tokensPerAllocation * .5)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 50% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 50% of allocation")
-                })
-
-                it("should split the allocation 40:60 (recipient:caller) when two thirds way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .6)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .4)
-                    const callerTokens = Math.floor(tokensPerAllocation * .6)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 40% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 60% of allocation")
-                })
-
-                it("should split the allocation 25:75 (recipient:caller) when three fourths way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .75)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .25)
-                    const callerTokens = Math.floor(tokensPerAllocation * .75)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 25% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 75% of allocation")
-                })
-
-                it("should split the allocation 10:90 (recipient:caller) when nine tenths way through the caller allocation period", async () => {
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .9)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
-
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .1)
-                    const callerTokens = Math.floor(tokensPerAllocation * .9)
-                    assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 10% of allocation")
-                    assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 90% of allocation")
                 })
 
                 it("should emit Generate event with correct fields", async () => {
-                    const tokensPerAllocation = Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS)
-                    const recipientTokens = Math.floor(tokensPerAllocation * .1)
-                    const callerTokens = Math.floor(tokensPerAllocation * .9)
-
                     let e = merkleMine.Generate({})
-                    e.watch((err, result) => {
+                    e.watch(async (err, result) => {
                         e.stopWatching()
 
                         assert.equal(result.args._recipient, accounts[0], "should set recipient")
-                        assert.equal(result.args._caller, accounts[1], "should set caller")
-                        assert.equal(result.args._recipientTokenAmount, recipientTokens, "should set recipient token amount")
-                        assert.equal(result.args._callerTokenAmount, callerTokens, "should set caller token amount")
+                        assert.equal(result.args._caller, accounts[0], "should set caller = recipient")
+                        assert.equal(
+                            result.args._recipientTokenAmount,
+                            TOKENS_PER_ALLOCATION,
+                            "should set recipient token amount to full allocation"
+                        )
+                        assert.equal(result.args._callerTokenAmount, 0, "should set caller token amount to 0")
+                        assert.equal(result.args._block, web3.eth.blockNumber, "should set block to current block")
                     })
 
-                    const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .9)).toNumber() - 1
-                    await rpc.waitUntilBlock(generateBlockParent)
-
-                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+                    await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
                 })
             })
 
-            describe("current block is after the end block", () => {
-                it("should transfer the full allocation to the caller", async () => {
-                    const callerAllocationEndBlock = await merkleMine.callerAllocationEndBlock.call()
-                    await rpc.waitUntilBlock(callerAllocationEndBlock.toNumber())
+            describe("recipient != caller", () => {
+                it("should fail if we are not in caller allocation period", async () => {
+                    await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]}))
+                })
+
+                it("should set recipient allocation as generated", async () => {
+                    await rpc.waitUntilBlock(callerAllocationStartBlock - 1)
 
                     await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
 
-                    assert.equal(await token.balanceOf(accounts[0]), 0, "should not transfer any tokens to recipient")
-                    assert.equal(await token.balanceOf(accounts[1]), Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS), "should transfer full allocation to caller")
+                    assert.isOk(await merkleMine.generated.call(accounts[0]), "should set recipient allocation as generated")
+                })
+
+                describe("current block >= callerAllocationStartBlock and current block < callerAllocationEndBlock", () => {
+                    beforeEach(async () => {
+                        // Fast forward to caller allocation period
+                        await rpc.waitUntilBlock(callerAllocationStartBlock - 1)
+                    })
+
+                    it("should split the allocation 100:0 (recipient:caller) when current block == callerAllocationStartBlock", async () => {
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        assert.equal(await token.balanceOf(accounts[0]), TOKENS_PER_ALLOCATION, "recipient should receive 100% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), 0, "caller should receive 0% of allocation")
+                    })
+
+                    it("should split the allocation 90:10 (recipient:caller) when a tenth way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .1)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION* .9)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .1)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 90% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 10% of allocation")
+                    })
+
+                    it("should split the allocation 75:25 (recipient:caller) when a quarter way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .25)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .75)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .25)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 75% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 25% of allocation")
+                    })
+
+                    it("should split the allocation 60:40 (recipient:caller) when a third way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .4)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .6)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .4)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 60% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 40% of allocation")
+                    })
+
+                    it("should split the allocation 50:50 (recipient:caller) when halfway through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .5)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .5)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .5)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 50% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 50% of allocation")
+                    })
+
+                    it("should split the allocation 40:60 (recipient:caller) when two thirds way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .6)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .4)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .6)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 40% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 60% of allocation")
+                    })
+
+                    it("should split the allocation 25:75 (recipient:caller) when three fourths way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .75)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .25)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .75)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 25% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 75% of allocation")
+                    })
+
+                    it("should split the allocation 10:90 (recipient:caller) when nine tenths way through the caller allocation period", async () => {
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .9)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .1)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .9)
+                        assert.equal(await token.balanceOf(accounts[0]), recipientTokens, "recipient should receive 10% of allocation")
+                        assert.equal(await token.balanceOf(accounts[1]), callerTokens, "caller should receive 90% of allocation")
+                    })
+
+                    it("should emit Generate event with correct fields", async () => {
+                        const recipientTokens = Math.floor(TOKENS_PER_ALLOCATION * .1)
+                        const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .9)
+
+                        let e = merkleMine.Generate({})
+                        e.watch((err, result) => {
+                            e.stopWatching()
+
+                            assert.equal(result.args._recipient, accounts[0], "should set recipient")
+                            assert.equal(result.args._caller, accounts[1], "should set caller")
+                            assert.equal(result.args._recipientTokenAmount, recipientTokens, "should set recipient token amount")
+                            assert.equal(result.args._callerTokenAmount, callerTokens, "should set caller token amount")
+                        })
+
+                        const generateBlockParent = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .9)).toNumber() - 1
+                        await rpc.waitUntilBlock(generateBlockParent)
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+                    })
+                })
+
+                describe("current block is after the end block", () => {
+                    it("should transfer the full allocation to the caller", async () => {
+                        const callerAllocationEndBlock = await merkleMine.callerAllocationEndBlock.call()
+                        await rpc.waitUntilBlock(callerAllocationEndBlock.toNumber())
+
+                        await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]})
+
+                        assert.equal(await token.balanceOf(accounts[0]), 0, "should not transfer any tokens to recipient")
+                        assert.equal(await token.balanceOf(accounts[1]), Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS), "should transfer full allocation to caller")
+                    })
                 })
             })
         })
     })
 
-    describe("tokensPerAllocation", () => {
-        it("should return totalGenesisTokens / totalGenesisRecipients (floored)", async () => {
-            assert.equal(
-                await merkleMine.tokensPerAllocation.call(),
-                Math.floor(TOTAL_GENESIS_TOKENS / TOTAL_GENESIS_RECIPIENTS),
-                "should return totalGenesisTokens / totalGenesisRecipients (floored)"
-            )
+    describe("callerTokenAmountAtBlock", () => {
+        it("returns 0 if current block < callerAllocationStartBlock", async () => {
+            assert.equal(await merkleMine.callerTokenAmountAtBlock(callerAllocationStartBlock - 1), 0, "caller should be able to claim 0 tokens")
+        })
+
+        it("returns the full tokensPerAllocation if current block > callerAllocationEndBlock", async () => {
+            assert.equal(await merkleMine.callerTokenAmountAtBlock(callerAllocationEndBlock + 1), TOKENS_PER_ALLOCATION, "caller should be able to claim 100% of allocation")
+        })
+
+        it("returns the full tokensPerAllocation if current block == callerAllocationEndBlock", async () => {
+            assert.equal(await merkleMine.callerTokenAmountAtBlock(callerAllocationEndBlock), TOKENS_PER_ALLOCATION, "caller should be able to claim 100% of allocation")
+        })
+
+        describe("current block >= callerAllocationStartBlock and current block < callerAllocationEndBlock", () => {
+            it("should return 0 when current block == callerAllocationStartBlock", async () => {
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerAllocationStartBlock),
+                    0,
+                    "caller should be able to claim 0 tokens"
+                )
+            })
+
+            it("should return 10% of allocation when a tenth way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .1)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .1)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 10% of allocation"
+                )
+            })
+
+            it("should return 25% of allocation when a quarter way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .25)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .25)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 25% of allocation"
+                )
+            })
+
+            it("should return 40% of allocation when a third way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .4)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .4)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 40% of allocation"
+                )
+            })
+
+            it("should return 50% of allocation when halfway through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .5)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .5)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 50% of allocation"
+                )
+            })
+
+            it("should return 60% of allocation when two thirds way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .6)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .6)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 60% of allocation"
+                )
+            })
+
+            it("should return 75% of allocation when three fourths way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .75)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .75)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 75% of allocation"
+                )
+            })
+
+            it("should return 90% of allocation when nine tenths way through the caller allocation period", async () => {
+                const callerBlock = (await merkleMine.callerAllocationStartBlock.call()).plus(Math.floor(CALLER_ALLOCATION_PERIOD * .9)).toNumber()
+
+                const callerTokens = Math.floor(TOKENS_PER_ALLOCATION * .9)
+
+                assert.equal(
+                    await merkleMine.callerTokenAmountAtBlock(callerBlock),
+                    callerTokens,
+                    "caller should be able to claim 90% of allocation"
+                )
+            })
         })
     })
 })

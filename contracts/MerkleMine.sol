@@ -31,12 +31,27 @@ contract MerkleMine {
     // From this block onwards, a third party caller (not the recipient) can generate and claim the recipient's full allocation
     uint256 public callerAllocationEndBlock;
 
+    // Track if the generation process is started
+    bool public started;
+
     // Track the already generated allocations for recipients
     mapping (address => bool) public generated;
 
     // Check that a recipient's allocation has not been generated
     modifier notGenerated(address _recipient) {
         require(!generated[_recipient]);
+        _;
+    }
+
+    // Check that the generation process is started
+    modifier isStarted() {
+        require(started);
+        _;
+    }
+
+    // Check that the generation process is not started
+    modifier isNotStarted() {
+        require(!started);
         _;
     }
 
@@ -85,6 +100,16 @@ contract MerkleMine {
         genesisBlock = _genesisBlock;
         callerAllocationStartBlock = _callerAllocationStartBlock;
         callerAllocationEndBlock = _callerAllocationEndBlock;
+    }
+
+    /**
+     * @dev Start the generation process - first checks that this contract's balance is equal to `totalGenesisTokens`
+     * The generation process must not already be started
+     */
+    function start() external isNotStarted {
+        require(token.balanceOf(this) == totalGenesisTokens);
+
+        started = true;
     }
 
     /**
