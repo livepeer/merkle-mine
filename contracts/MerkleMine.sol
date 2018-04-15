@@ -30,6 +30,8 @@ contract MerkleMine {
     uint256 public callerAllocationStartBlock;
     // From this block onwards, a third party caller (not the recipient) can generate and claim the recipient's full allocation
     uint256 public callerAllocationEndBlock;
+    // Number of blocks in the caller allocation period as defined by `callerAllocationEndBlock` - `callerAllocationStartBlock`
+    uint256 public callerAllocationPeriod;
 
     // Track if the generation process is started
     bool public started;
@@ -100,6 +102,7 @@ contract MerkleMine {
         genesisBlock = _genesisBlock;
         callerAllocationStartBlock = _callerAllocationStartBlock;
         callerAllocationEndBlock = _callerAllocationEndBlock;
+        callerAllocationPeriod = _callerAllocationEndBlock.sub(_callerAllocationStartBlock);
     }
 
     /**
@@ -108,7 +111,7 @@ contract MerkleMine {
      */
     function start() external isNotStarted {
         // Check that this contract has a sufficient balance for the generation period
-        require(token.balanceOf(this) == totalGenesisTokens);
+        require(token.balanceOf(this) >= totalGenesisTokens);
 
         started = true;
     }
@@ -134,7 +137,7 @@ contract MerkleMine {
 
         if (caller == _recipient) {
             // If the caller is the recipient, transfer the full allocation to the caller/recipient
-            token.transfer(_recipient, tokensPerAllocation);
+            require(token.transfer(_recipient, tokensPerAllocation));
 
             emit Generate(_recipient, _recipient, tokensPerAllocation, 0, block.number);
         } else {
@@ -146,11 +149,11 @@ contract MerkleMine {
             uint256 recipientTokenAmount = tokensPerAllocation.sub(callerTokenAmount);
 
             if (callerTokenAmount > 0) {
-                token.transfer(caller, callerTokenAmount);
+                require(token.transfer(caller, callerTokenAmount));
             }
 
             if (recipientTokenAmount > 0) {
-                token.transfer(_recipient, recipientTokenAmount);
+                require(token.transfer(_recipient, recipientTokenAmount));
             }
 
             emit Generate(_recipient, caller, recipientTokenAmount, callerTokenAmount, block.number);
@@ -173,7 +176,6 @@ contract MerkleMine {
             // of the recipient's allocation based on a linear curve - as more blocks pass in the caller allocation
             // period, the amount claimable by the third party caller increases linearly
             uint256 blocksSinceCallerAllocationStartBlock = _blockNumber.sub(callerAllocationStartBlock);
-            uint256 callerAllocationPeriod = callerAllocationEndBlock.sub(callerAllocationStartBlock);
             return tokensPerAllocation.mul(blocksSinceCallerAllocationStartBlock).div(callerAllocationPeriod);
         }
     }

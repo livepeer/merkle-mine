@@ -5,6 +5,7 @@ const MerkleTree = require("../utils/merkleTree.js")
 
 const MerkleMine = artifacts.require("MerkleMine")
 const TestToken = artifacts.require("TestToken")
+const UnsafeTestToken = artifacts.require("UnsafeTestToken")
 
 contract("MerkleMine", accounts => {
     describe("constructor", () => {
@@ -157,6 +158,7 @@ contract("MerkleMine", accounts => {
             assert.equal(await merkleMine.genesisBlock.call(), genesisBlock, "should set genesis block")
             assert.equal(await merkleMine.callerAllocationStartBlock.call(), callerAllocationStartBlock, "should set caller allocation start block")
             assert.equal(await merkleMine.callerAllocationEndBlock.call(), callerAllocationEndBlock, "should set caller allocation end block")
+            assert.equal(await merkleMine.callerAllocationPeriod.call(), callerAllocationEndBlock - callerAllocationStartBlock, "should set caller allocation period")
         })
     })
 
@@ -207,7 +209,7 @@ contract("MerkleMine", accounts => {
     })
 
     describe("start", () => {
-        it("should fail if the contract does not have a balance == totalGenesisTokens", async () => {
+        it("should fail if the contract has a balance < totalGenesisTokens", async () => {
             await expectThrow(merkleMine.start())
         })
 
@@ -216,6 +218,13 @@ contract("MerkleMine", accounts => {
             await merkleMine.start()
 
             await expectThrow(merkleMine.start())
+        })
+
+        it("should set started = true if the contract has a balance > totalGenesisTokens", async () => {
+            await token.mint(merkleMine.address, TOTAL_GENESIS_TOKENS + 1)
+            await merkleMine.start()
+
+            assert.isOk(await merkleMine.started.call(), "should set started = true")
         })
 
         it("should set started = true if the contract has a balance == totalGenesisTokens", async () => {
@@ -251,6 +260,27 @@ contract("MerkleMine", accounts => {
             })
 
             describe("recipient == caller", () => {
+                it("should fail if the token transfer returns false", async () => {
+                    const unsafeToken = await UnsafeTestToken.new()
+                    const badMerkleMine = await MerkleMine.new(
+                        unsafeToken.address,
+                        merkleTree.getHexRoot(),
+                        TOTAL_GENESIS_TOKENS,
+                        1,
+                        BALANCE_THRESHOLD,
+                        web3.eth.blockNumber,
+                        web3.eth.blockNumber + 11,
+                        web3.eth.blockNumber + 111
+                    )
+
+                    await unsafeToken.mint(badMerkleMine.address, TOTAL_GENESIS_TOKENS)
+                    await badMerkleMine.start()
+                    await badMerkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
+
+                    // Internal token transfer should fail because contract does not have enough tokens
+                    await expectThrow(badMerkleMine.generate(accounts[1], merkleTree.getHexProof(accounts[1]), {from: accounts[1]}))
+                })
+
                 it("should transfer the full allocation to the recipient and set recipient allocation as generated", async () => {
                     await merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
 
@@ -285,6 +315,28 @@ contract("MerkleMine", accounts => {
             describe("recipient != caller", () => {
                 it("should fail if we are not in caller allocation period", async () => {
                     await expectThrow(merkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[1]}))
+                })
+
+                it("should fail if one of the token transfers returns false", async () => {
+                    const unsafeToken = await UnsafeTestToken.new()
+                    const badMerkleMine = await MerkleMine.new(
+                        unsafeToken.address,
+                        merkleTree.getHexRoot(),
+                        TOTAL_GENESIS_TOKENS,
+                        1,
+                        BALANCE_THRESHOLD,
+                        web3.eth.blockNumber,
+                        web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + 1,
+                        web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + CALLER_ALLOCATION_PERIOD + 1
+                    )
+
+                    await unsafeToken.mint(badMerkleMine.address, TOTAL_GENESIS_TOKENS)
+                    await badMerkleMine.start()
+                    await badMerkleMine.generate(accounts[0], merkleTree.getHexProof(accounts[0]), {from: accounts[0]})
+                    await rpc.waitUntilBlock(web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF)
+
+                    // Internal token transfer should fail because contract does not have enough tokens
+                    await expectThrow(badMerkleMine.generate(accounts[1], merkleTree.getHexProof(accounts[1]), {from: accounts[2]}))
                 })
 
                 it("should set recipient allocation as generated", async () => {
