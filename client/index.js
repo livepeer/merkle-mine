@@ -2,6 +2,7 @@ const Web3 = require("web3")
 const prompt = require("prompt-sync")()
 const TxKeyManager = require("./lib/TxKeyManager")
 const MerkleMineGenerator = require("./lib/MerkleMineGenerator")
+const { makeTree } = require("./lib/helpers")
 
 const argv = require("yargs")
       .usage("Usage: $0 --rinkeby --dev --acctFile [accounts file] --datadir [data directory] --merkleMine [MerkleMine address] --recipient [recipient address] --caller [caller address] --gasPrice [gas price]")
@@ -33,11 +34,12 @@ const main = async () => {
     await txKeyManager.unlock(password)
     console.log(`Unlocked caller account ${argv.caller}`)
 
-    const gen = new MerkleMineGenerator(provider, txKeyManager, argv.merkleMine, argv.recipient, argv.caller, argv.gasPrice)
-    await gen.makeTree(argv.acctFile)
-    await gen.validateRoot()
-    await gen.checkStarted()
-    await gen.checkGenerated()
+    console.log(`Creating Merkle tree with accounts in file: ${argv.acctFile}`)
+    const merkleTree = await makeTree(argv.acctFile)
+    console.log(`Created Merkle tree with root ${merkleTree.getHexRoot()}`)
+
+    const gen = new MerkleMineGenerator(provider, txKeyManager, merkleTree, argv.merkleMine, argv.recipient, argv.caller, argv.gasPrice)
+    await gen.performChecks()
     await gen.submitProof()
 }
 
