@@ -30,10 +30,11 @@ A genesis state `G` is consists of:
 4. Use sorted `candidateAccounts` as ordered leaf nodes of Merkle tree construction. The hashing algorithm used for the Merkle tree construction is keccak256. Each leaf node of the Merkle tree is the keccak256 hash of the hex encoded byte representation of a particular address string. Let the root of the Merkle tree be `localRoot`.
 5. Validate that `len(candidateAccounts) == totalGenesisRecipients`.
 6. Validate that `localRoot == genesisRoot`.
-7. Validate that the generation period has started.
-8. Validate that `token.balanceOf(merkleMine) >= tokenAllocationAmount`.
-9. Validate that the token allocation for the account has not been generated.
-10. Invoke `generate()` with the Merkle proof of an account's inclusion in `genesisRoot`.
+7. Validate locally that the Merkle proof for the recipient is valid for the Merkle root.
+8. Validate that the generation period has started.
+9. Validate that `token.balanceOf(merkleMine) >= tokenAllocationAmount`.
+10. Validate that the token allocation for the account has not been generated.
+11. Invoke `generate()` with the Merkle proof of an account's inclusion in `genesisRoot`.
 
 ## generate() function
 
