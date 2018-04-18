@@ -127,4 +127,18 @@ module.exports = class MerkleTree {
 
         return this.layers[0].length
     }
+
+    verifyProof (el, proof) {
+        let leaf
+
+        if (el.length !== 32 || !Buffer.isBuffer(el)) {
+            leaf = sha3(el)
+        } else {
+            leaf = el
+        }
+
+        return this.getRoot().equals(proof.reduce((hash, pair) => {
+            return this.combinedHash(hash, pair)
+        }, leaf))
+    }
 }

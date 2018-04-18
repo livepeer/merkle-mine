@@ -36,12 +36,21 @@ module.exports = class MerkleMineGenerator {
 
         console.log(`Validated locally generated Merkle root ${localRoot} with Merkle root stored in MerkleMine contract!`)
 
+        // Validate proof locally
+        const validProof = this.merkleTree.verifyProof(this.recipientAddress, this.merkleTree.getProof(this.recipientAddress))
+
+        if (!validProof) {
+            throw new Error(`Local verification of Merkle proof failed!`)
+        }
+
         // Validate that the MerkleMine contract is in a started state
         const started = await merkleMine.methods.started().call()
 
         if (!started) {
             throw new Error(`Generation period has not started for MerkleMine contract`)
         }
+
+        console.log("Validated Merkle proof locally!")
 
         // Validate MerkleMine contract balance is sufficient for the token allocation generation
         const tokensPerAllocation = await merkleMine.methods.tokensPerAllocation().call()
