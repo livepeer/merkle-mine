@@ -186,7 +186,7 @@ contract("MerkleMine", accounts => {
         callerAllocationEndBlock = web3.eth.blockNumber + BLOCKS_TO_CALLER_CLIFF + CALLER_ALLOCATION_PERIOD + 1
 
         token = await TestToken.new()
-        const sortedAccounts = accounts.map(acct => ethUtil.toBuffer(acct)).sort(Buffer.compare)
+        const sortedAccounts = [...new Set(accounts)].map(acct => ethUtil.toBuffer(ethUtil.addHexPrefix(acct))).sort(Buffer.compare)
         merkleTree = new MerkleTree(sortedAccounts)
         merkleMine = await MerkleMine.new(
             token.address,

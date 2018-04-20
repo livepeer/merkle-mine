@@ -6,18 +6,14 @@ const { sha3, bufferToHex } = require("ethereumjs-util")
 
 module.exports = class MerkleTree {
     constructor (elements) {
-        // Filter empty strings and retain unique elements only
-        this.elements = [...new Set(elements.filter(el => el))]
         // Hash elements
-        this.elements = this.elements.map(el => sha3(el))
-
+        this.elements = elements.map(el => sha3(el))
         // Create layers
         this.layers = this.getLayers(this.elements)
     }
 
     getLayers (elements) {
         if (elements.length === 0) {
-            return [['']]
         }
 
         const layers = []
@@ -122,5 +118,27 @@ module.exports = class MerkleTree {
 
     sortAndConcat (...args) {
         return Buffer.concat([...args].sort(Buffer.compare))
+    }
+
+    getNumLeaves () {
+        if (this.layers.length == 0) {
+            throw new Error('Merkle tree does not have any leaves')
+        }
+
+        return this.layers[0].length
+    }
+
+    verifyProof (el, proof) {
+        let leaf
+
+        if (el.length !== 32 || !Buffer.isBuffer(el)) {
+            leaf = sha3(el)
+        } else {
+            leaf = el
+        }
+
+        return this.getRoot().equals(proof.reduce((hash, pair) => {
+            return this.combinedHash(hash, pair)
+        }, leaf))
     }
 }

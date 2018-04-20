@@ -28,11 +28,13 @@ A genesis state `G` is consists of:
     1. If `getBalance(account) > balanceThreshold && len(getCode(account)) == 0` then add the account to `candidateAccounts` array. `// Only user controlled acounts with balance greater than balanceThreshold.`
 3. Sort the `candidateAccounts` array in ascending order of uint value of the account hex address.
 4. Use sorted `candidateAccounts` as ordered leaf nodes of Merkle tree construction. The hashing algorithm used for the Merkle tree construction is keccak256. Each leaf node of the Merkle tree is the keccak256 hash of the hex encoded byte representation of a particular address string. Let the root of the Merkle tree be `localRoot`.
-5. Validate that `localRoot == genesisRoot`.
-6. Validate that `len(candidateAccounts) == totalGenesisRecipients`.
-7. Validate that `token.balanceOf(merkleMine) >= tokenAllocationAmount`.
-8. Validate that the token allocation for the account has not been generated.
-9. Invoke `generate()` with the Merkle proof of an account's inclusion in `genesisRoot`.
+5. Validate that `len(candidateAccounts) == totalGenesisRecipients`.
+6. Validate that `localRoot == genesisRoot`.
+7. Validate locally that the Merkle proof for the recipient is valid for the Merkle root.
+8. Validate that the generation period has started.
+9. Validate that `token.balanceOf(merkleMine) >= tokenAllocationAmount`.
+10. Validate that the token allocation for the account has not been generated.
+11. Invoke `generate()` with the Merkle proof of an account's inclusion in `genesisRoot`.
 
 ## generate() function
 
