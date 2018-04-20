@@ -1,4 +1,5 @@
 const Web3 = require("web3")
+const BigNumber = require("bignumber.js")
 const ethUtil = require("ethereumjs-util")
 const MerkleMineArtifact = require("./artifacts/MerkleMine.json")
 const ERC20Artifact = require("./artifacts/ERC20.json")
@@ -53,11 +54,11 @@ module.exports = class MerkleMineGenerator {
         console.log("Validated Merkle proof locally!")
 
         // Validate MerkleMine contract balance is sufficient for the token allocation generation
-        const tokensPerAllocation = await merkleMine.methods.tokensPerAllocation().call()
+        const tokensPerAllocation = new BigNumber(await merkleMine.methods.tokensPerAllocation().call())
         const token = await this.getToken()
-        const merkleMineBalance = await token.methods.balanceOf(this.merkleMineAddress).call()
+        const merkleMineBalance = new BigNumber(await token.methods.balanceOf(this.merkleMineAddress).call())
 
-        if (merkleMineBalance < tokensPerAllocation) {
+        if (merkleMineBalance.comparedTo(tokensPerAllocation) < 0) {
             throw new Error(`Tokens per allocation is ${tokensPerAllocation.toString()} but MerkleMine contract only has balance of ${merkleMineBalance.toString()}`)
         }
 
