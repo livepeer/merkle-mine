@@ -8,7 +8,7 @@ const argv = require("yargs")
 const main = async () => {
     console.log(`Creating Merkle tree with accounts in file: ${argv.acctFile}`)
     const merkleTree = await makeTree(argv.acctFile)
-    console.log(`Created Merkle tree with root ${merkleTree.getHexRoot()}`)
+    console.log(`Created Merkle tree with root ${merkleTree.getHexRoot()} and ${merkleTree.getNumLeaves()} leaves`)
 }
 
 try {

@@ -23,6 +23,11 @@ const createProvider = memoizeProviderCreator()
 
 module.exports = {
   networks: {
+    dev: {
+      host: "localhost",
+      port: 8545,
+      network_id: "*"
+    },
     rinkeby: {
       provider: () => {
         return createProvider(process.env.RINKEBY_ACCOUNT, process.env.DATA_DIR, "https://rinkeby.infura.io", process.env.READ_ONLY)
