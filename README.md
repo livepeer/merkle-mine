@@ -27,3 +27,14 @@ npm install
 # Use the --dev flag to use a custom development network with an Ethereum client running on localhost
 node client/index.js --acctFile [accounts file] --datadir [data directory] --merkleMine [MerkleMine address] --recipient [recipient address] --caller [caller address]
 ```
+
+## Working with a local dev chain
+
+```
+# Generate `genesisRoot` and `totalGenesisRecipients`
+npm run client/makeRoot.js --acctFile [accounts file]
+
+# Configure `genesisRoot` and `totalGenesisRecipients` in `migrations/migrations.config.js`
+
+npm run migrate -- --network=dev
+```
