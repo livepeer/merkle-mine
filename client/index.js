@@ -5,18 +5,15 @@ const MerkleMineGenerator = require("./lib/MerkleMineGenerator")
 const { makeTree } = require("./lib/helpers")
 
 const argv = require("yargs")
-      .usage("Usage: $0 --rinkeby --dev --acctFile [accounts file] --datadir [data directory] --merkleMine [MerkleMine address] --recipient [recipient address] --caller [caller address] --gasPrice [gas price]")
-      .boolean(["rinkeby", "dev"])
+      .usage("Usage: $0 --rinkeby --dev --generate --acctFile [accounts file] --datadir [data directory] --merkleMine [MerkleMine address] --recipient [recipient address] --caller [caller address] --gasPrice [gas price]")
+      .boolean(["rinkeby", "dev", "generate"])
+      .string(["merkleMine", "recipient", "caller"])
       .default("gasPrice", 5000000000)
-      .demandOption(["acctFile", "datadir", "merkleMine", "caller"])
+      .demandOption(["acctFile", "merkleMine", "recipient"])
+      .implies("generate", ["datadir", "caller"])
       .argv
 
 const main = async () => {
-    // If --recipient not provided, default to match --caller
-    if (argv.recipient == undefined) {
-        argv.recipient = argv.caller
-    }
-
     let provider
 
     if (argv.dev) {
@@ -27,24 +24,37 @@ const main = async () => {
         provider = new Web3.providers.HttpProvider("https://mainnet.infura.io")
     }
 
-    console.log(`You must provide a password to unlock your caller account ${argv.caller}`)
-    const password = prompt("Password: ", { echo: "" })
-
-    const txKeyManager = new TxKeyManager(argv.datadir, argv.caller)
-    await txKeyManager.unlock(password)
-    console.log(`Unlocked caller account ${argv.caller}`)
-
     console.log(`Creating Merkle tree with accounts in file: ${argv.acctFile}`)
     const merkleTree = await makeTree(argv.acctFile)
     console.log(`Created Merkle tree with root ${merkleTree.getHexRoot()}`)
 
-    const gen = new MerkleMineGenerator(provider, txKeyManager, merkleTree, argv.merkleMine, argv.recipient, argv.caller, argv.gasPrice)
-    await gen.performChecks()
-    await gen.submitProof()
+    const gen = new MerkleMineGenerator(provider, merkleTree, argv.merkleMine, argv.recipient)
+
+    try {
+        await gen.performChecks()
+    } catch (err) {
+        console.log("Some checks failed - see below for more details. Please visit livepeer.org to learn how to start participating in the Livepeer network and earning tokens.\n")
+        console.error(err)
+        return
+    }
+
+    if (argv.generate) {
+        try {
+            console.log(`You must provide a password to unlock your caller account ${argv.caller}`)
+            const password = prompt("Password: ", { echo: "" })
+
+            const txKeyManager = new TxKeyManager(argv.datadir, argv.caller)
+            await txKeyManager.unlock(password)
+            console.log(`Unlocked caller account ${argv.caller}`)
+
+            await gen.submitProof(txKeyManager, argv.caller, argv.gasPrice)
+
+            console.log("You have successfully generated Livepeer Token! Visit explorer.livepeer.org to use use your token in the Livepeer delegation protocol.")
+        } catch (err) {
+            console.error(err)
+            return
+        }
+    }
 }
 
-try {
-    main()
-} catch (err) {
-    console.error(err)
-}
+main()
