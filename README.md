@@ -27,6 +27,7 @@ Flags
 - `--caller`: address of account used to submit the MerkleMine contract transaction. Required if `--generate` flag is enabled
 - `--merkleMine`: address of MerkleMine contract
 - `--recipient`: address of account that is included in the MerkleMine genesis state that is the recipient of a token allocation
+- `--gasPrice`: gas price to use for submission of MerkleMine contract transaction. Default: 5 GWEI
 
 ### Generating a token allocation
 
