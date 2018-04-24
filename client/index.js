@@ -33,7 +33,7 @@ const main = async () => {
     try {
         await gen.performChecks()
     } catch (err) {
-        console.log("Some checks failed - see below for more details. Please visit livepeer.org to learn how to start participating in the Livepeer network and earning tokens.\n")
+        console.log("Some checks failed - see below for more details. Please visit livepeer.org to learn how to start participating in the Livepeer network.\n")
         console.error(err)
         return
     }

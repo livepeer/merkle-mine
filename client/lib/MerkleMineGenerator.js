@@ -81,7 +81,7 @@ module.exports = class MerkleMineGenerator {
 
     async submitProof(txKeyManager, callerAddress, gasPrice) {
         const merkleMine = await this.getMerkleMine()
-        const generateFn = merkleMine.methods.generate(this.recipientAddress, this.merkleTree.getHexProof(his.recipientAddress))
+        const generateFn = merkleMine.methods.generate(this.recipientAddress, this.merkleTree.getHexProof(this.recipientAddress))
         const gas = await generateFn.estimateGas({from: callerAddress})
         const data = generateFn.encodeABI()
         const nonce = await this.web3.eth.getTransactionCount(callerAddress, "pending")
