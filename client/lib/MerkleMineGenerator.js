@@ -1,19 +1,16 @@
 const Web3 = require("web3")
 const BigNumber = require("bignumber.js")
-const ethUtil = require("ethereumjs-util")
+const { addHexPrefix } = require("ethereumjs-util")
 const MerkleMineArtifact = require("./artifacts/MerkleMine.json")
 const ERC20Artifact = require("./artifacts/ERC20.json")
 
 module.exports = class MerkleMineGenerator {
-    constructor(provider, txKeyManager, merkleTree, merkleMineAddress, recipientAddress, callerAddress, gasPrice) {
+    constructor(provider, merkleTree, merkleMineAddress, recipientAddress) {
         this.web3 = new Web3()
         this.web3.setProvider(provider)
-        this.txKeyManager = txKeyManager
         this.merkleTree = merkleTree
-        this.merkleMineAddress = merkleMineAddress
-        this.recipientAddress = recipientAddress
-        this.callerAddress = callerAddress
-        this.gasPrice = gasPrice
+        this.merkleMineAddress = addHexPrefix(merkleMineAddress)
+        this.recipientAddress = addHexPrefix(recipientAddress)
     }
 
     async performChecks() {
@@ -23,7 +20,7 @@ module.exports = class MerkleMineGenerator {
         const numCandidateAccounts = this.merkleTree.getNumLeaves()
         const totalGenesisRecipients = await merkleMine.methods.totalGenesisRecipients().call()
 
-        if (numCandidateAccounts == totalGenesisRecipients) {
+        if (numCandidateAccounts != parseInt(totalGenesisRecipients)) {
             throw new Error(`Number of candidate accounts ${numCandidateAccounts} != totalGenesisRecipients ${totalGenesisRecipients}`)
         }
 
@@ -38,7 +35,15 @@ module.exports = class MerkleMineGenerator {
         console.log(`Validated locally generated Merkle root ${localRoot} with Merkle root stored in MerkleMine contract!`)
 
         // Validate proof locally
-        const validProof = this.merkleTree.verifyProof(this.recipientAddress, this.merkleTree.getProof(this.recipientAddress))
+        let proof
+
+        try {
+            proof = this.merkleTree.getProof(this.recipientAddress)
+        } catch (err) {
+            throw new Error(`The recipient address ${this.recipientAddress} was not included in the genesis state.`)
+        }
+
+        const validProof = this.merkleTree.verifyProof(this.recipientAddress, proof)
 
         if (!validProof) {
             throw new Error(`Local verification of Merkle proof failed!`)
@@ -68,19 +73,23 @@ module.exports = class MerkleMineGenerator {
         if (generated) {
             throw new Error(`Allocation for ${this.recipientAddress} already generated!`)
         }
+
+        console.log(`Merkle proof for recipient ${this.recipientAddress}: \n\n`)
+        console.log(this.merkleTree.getHexProof(this.recipientAddress))
+        console.log("\n\n")
     }
 
-    async submitProof() {
+    async submitProof(txKeyManager, callerAddress, gasPrice) {
         const merkleMine = await this.getMerkleMine()
-        const generateFn = merkleMine.methods.generate(this.recipientAddress, this.merkleTree.getHexProof(ethUtil.addHexPrefix(this.recipientAddress)))
-        const gas = await generateFn.estimateGas({from: this.callerAddress})
+        const generateFn = merkleMine.methods.generate(this.recipientAddress, this.merkleTree.getHexProof(this.recipientAddress))
+        const gas = await generateFn.estimateGas({from: callerAddress})
         const data = generateFn.encodeABI()
-        const nonce = await this.web3.eth.getTransactionCount(this.callerAddress, "pending")
+        const nonce = await this.web3.eth.getTransactionCount(callerAddress, "pending")
         const networkId = await this.web3.eth.net.getId()
 
-        const signedTx = this.txKeyManager.signTransaction({
+        const signedTx = txKeyManager.signTransaction({
             nonce: nonce,
-            gasPrice: this.gasPrice,
+            gasPrice: gasPrice,
             gasLimit: gas,
             to: this.merkleMineAddress,
             value: 0,
@@ -89,14 +98,12 @@ module.exports = class MerkleMineGenerator {
         })
 
         const receipt = await this.web3.eth.sendSignedTransaction(signedTx).on("transactionHash", txHash => {
-            console.log(`Submitted tx ${txHash} to generate allocation for ${this.recipientAddress} from ${this.callerAddress}`)
+            console.log(`Submitted tx ${txHash} to generate allocation for ${this.recipientAddress} from ${callerAddress}`)
         })
 
         if (receipt.status === "0x0") {
-            throw new Error(`Failed to generate allocation for ${this.recipientAddress} from ${this.callerAddress} in tx ${receipt.transactionHash}`)
+            throw new Error(`Failed to generate allocation for ${this.recipientAddress} from ${callerAddress} in tx ${receipt.transactionHash}`)
         }
-
-        console.log(`Generated allocation for ${this.recipientAddress}`)
     }
 
     async getMerkleMine() {
