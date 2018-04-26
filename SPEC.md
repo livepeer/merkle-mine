@@ -26,8 +26,15 @@ A genesis state `G` is consists of:
 1. Observe the Ethereum account state database at `genesisBlock`.
 2. For each account:
     1. If `getBalance(account) > balanceThreshold && len(getCode(account)) == 0` then add the account to `candidateAccounts` array. `// Only user controlled acounts with balance greater than balanceThreshold.`
-3. Sort the `candidateAccounts` array in ascending order of uint value of the account hex address.
-4. Use sorted `candidateAccounts` as ordered leaf nodes of Merkle tree construction. The hashing algorithm used for the Merkle tree construction is keccak256. Each leaf node of the Merkle tree is the keccak256 hash of the hex encoded byte representation of a particular address string. Let the root of the Merkle tree be `localRoot`.
+3. Sort the `candidateAccounts` array in ascending order of the hexadecimal value for each account address.
+4. Use the sorted `candidateAccounts` to create the leaf nodes of a [Merkle tree](https://en.wikipedia.org/wiki/Merkle_tree). The hashing algorithm used for the
+Merkle tree construction is keccak256.
+    1. Each leaf node of the tree is the hash of the hexadecimal encoded account address in `candidateAccounts`. The order of the leaf nodes matches
+    the order of the sorted `candidateAccounts`
+    2. Each intermediary parent node of the tree is a hash calculated as `keccak256(concat(sorted([A, B])))` where `A` and `B` are child nodes (hashes) in the tree
+    and they are sorted in ascending order of their hexadecimal value. When creating the parents of leaves, if there are an odd number of leaves such that a particular
+    leaf `A` does not have a sibling, let the value for the parent of the leaf also be `A`
+    3. Let the root of the Merkle tree be `localRoot`
 5. Validate that `len(candidateAccounts) == totalGenesisRecipients`.
 6. Validate that `localRoot == genesisRoot`.
 7. Validate locally that the Merkle proof for the recipient is valid for the Merkle root.
@@ -35,6 +42,7 @@ A genesis state `G` is consists of:
 9. Validate that `token.balanceOf(merkleMine) >= tokenAllocationAmount`.
 10. Validate that the token allocation for the account has not been generated.
 11. Invoke `generate()` with the Merkle proof of an account's inclusion in `genesisRoot`.
+    1. The Merkle proof is an array of 32 byte hashes concatenated together
 
 ## generate() function
 
