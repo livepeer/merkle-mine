@@ -48,7 +48,7 @@ node --max-old-space-size=4096 client/index.js --generate --acctFile [accounts f
 This script will perform a number of validation checks in accordance with the specification, construct the Merkle proof for the given recipient and then submit
 a transaction from the given caller to the MerkleMine contract to generate a token allocation for the given recipient using the constructed Merkle proof.
 
-After you have generated your token, use the [Livepeer Protocol Explorer](https://explorer.livepeer.org/) to participate in the Livepeer network and delegate towards a transcoder.
+**After you have generated your token, use the [Livepeer Protocol Explorer](https://explorer.livepeer.org/) to participate in the Livepeer network and delegate towards a transcoder.**
 
 ### Constructing a Merkle proof for a recipient
 
