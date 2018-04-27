@@ -1,5 +1,9 @@
 # merkle-mine
 
+This repository contains generic MerkleMine code, and supporting
+scripts to generate your token in the Livepeer Merkle Mine. Read on to
+learn how to use the scripts to generate LPT.
+
 ## Requirements
 
 Node.js >= 8.5.0
