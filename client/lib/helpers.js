@@ -5,10 +5,16 @@ const { toBuffer, addHexPrefix } = require("ethereumjs-util")
 
 const makeTree = async accountsFile => {
     const data = await promisify(fs.readFile)(accountsFile)
-    const accounts = data.toString().split("\n").filter(acct => acct)
-    const sortedAccounts = [...new Set(accounts)].map(acct => toBuffer(addHexPrefix(acct))).sort(Buffer.compare)
 
-    return new MerkleTree(sortedAccounts)
+    let accounts = []
+
+    for (let i = 0; i < data.length; i += 20) {
+        const buf = Buffer.from(data.slice(i, i + 20), "hex")
+
+        accounts.push(buf)
+    }
+
+    return new MerkleTree(accounts)
 }
 
 module.exports = {
