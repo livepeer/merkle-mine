@@ -61,7 +61,9 @@ const main = async () => {
     try {
         await gen.performChecks()
     } catch (err) {
-        console.log("Some checks failed - see below for more details. Please visit livepeer.org to learn how to start participating in the Livepeer network.\n")
+        console.log("Some checks failed!")
+        console.log("Try using the accounts file at https://gateway.ipfs.io/ipfs/QmQbvkaw5j8TFeeR7c5Cs2naDciUVq9cLWnV3iNEzE784r")
+        console.log("Please visit livepeer.org to learn how to start participating in the Livepeer network")
         console.error(err)
         return
     }
