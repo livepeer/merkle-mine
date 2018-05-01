@@ -21,6 +21,7 @@
     "ethereumjs-util": "^5.1.5",
     "keythereum": "^1.0.2",
     "prompt-sync": "^4.1.6",
+    "r2": "^2.0.1",
     "web3": "^1.0.0-beta.33",
     "yargs": "^11.0.0"
   },
