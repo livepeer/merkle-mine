@@ -2,6 +2,7 @@ const config = require("./migrations.config.js")
 
 const MerkleMine = artifacts.require("MerkleMine")
 const TestToken = artifacts.require("TestToken")
+const MultiMerkleMine = artifacts.require("MultiMerkleMine")
 
 const deploy = async (deployer, artifact, ...args) => {
     await deployer.deploy(artifact, ...args)
@@ -59,6 +60,9 @@ module.exports = function(deployer, network) {
 
             await merkleMine.start()
             deployer.logger.log(`Started MerkleMine`)
+
+            const multiMerkleMine = await deploy(deployer, MultiMerkleMine)
+            deployer.logger.log(`Deployed MultiMerkleMine`)
         }
     })
 }
