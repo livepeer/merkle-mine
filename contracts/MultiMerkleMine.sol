@@ -4,31 +4,14 @@ import "./MerkleMine.sol";
 import "zeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
 
+import "./BytesUtil.sol";
+
+
 contract MultiMerkleMine {
 
 	using SafeMath for uint256;
 
-	bytes[] private _proofs;
-
 	event AlreadyGenerated(address indexed recipient, address indexed caller);
-
-	function extractProofs(bytes _merkleProofs) internal returns(bytes[]) {
-		require(_merkleProofs.length != 0, 'No proofs supplied!');
-		for(uint256 i=0; i<_merkleProofs.length; i++){
-		    uint256 proofSize = uint256(_merkleProofs[i]);
-		    require(proofSize % 32 == 0, 'Invalid proof detected!');
-		    bytes memory _proof = new bytes(proofSize);
-		    uint256 j = 0;
-		    while(j<proofSize){
-		        _proof[j]=_merkleProofs[i+1];
-		        i+=1;
-		        j+=1;
-		    }
-		    _proofs.push(_proof);
-		}
-		
-		return _proofs;
-	}
 
 	function multiGenerate(address _merkleMineContract, address[] _recipients, bytes _merkleProofs) public {
 		MerkleMine mine = MerkleMine(_merkleMineContract);
@@ -37,15 +20,25 @@ contract MultiMerkleMine {
 		require (block.number >= mine.callerAllocationStartBlock());
 		
 		uint256 initialBalance = token.balanceOf(this);
-		bytes[] memory proofs = extractProofs(_merkleProofs);
+		bytes[] memory proofs = new bytes[](_recipients.length);
+
+		uint256 i=0;
+		uint256 j=0;
+		while(i < _merkleProofs.length){
+			require(j < _recipients.length, 'Number of recipients != Number of proofs !');
+			uint256 proofSize = uint256(_merkleProofs[i]);
+		    require(proofSize % 32 == 0, 'Invalid proof detected!');
+		    bytes memory proof = BytesUtil.substr(_merkleProofs, i+1, proofSize);
+		    proofs[j] = proof;
+		    i = i + proofSize + 1;
+		    j = j + 1; 
+		}
 		
-		require(proofs.length == _recipients.length, 'Number of recipients and proofs is not equal!');
-		
-		for(uint256 i=0; i < _recipients.length; i++){
-			if(!mine.generated(_recipients[i])){
-				mine.generate(_recipients[i], proofs[i]);
+		for(uint256 k=0; k < _recipients.length; k++){
+			if(!mine.generated(_recipients[k])){
+				mine.generate(_recipients[k], proofs[k]);
 			}else{
-				emit AlreadyGenerated(_recipients[i], msg.sender);
+				emit AlreadyGenerated(_recipients[k], msg.sender);
 			}
 		}
 
@@ -55,8 +48,6 @@ contract MultiMerkleMine {
 		if(callerTokensGenerated > 0){
 			token.transfer(msg.sender, callerTokensGenerated);
 		}
-
-		delete _proofs;
 	}
 	
 }

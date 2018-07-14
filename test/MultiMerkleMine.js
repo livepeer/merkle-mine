@@ -108,6 +108,15 @@ contract("multiMerkleMine", accounts => {
                     ))
                 })
 
+                it("should fail if number of proofs != number of recipients", async ()=>{
+                    await expectThrow(multiMerkleMine.multiGenerate(
+                        merkleMine.address,
+                        accounts.slice(0,5),
+                        merkleTree.getExtendedHexProof(accounts.slice(0,9)),
+                        {from: accounts[0]}
+                    ))
+                })
+
                 it("should update msg.sender's token balance correctly after passing in a full set of valid proofs and recipients", async () => {
                     const initBalance = (await token.balanceOf(accounts[0])).toNumber()
                     const expectedCallerTokenAmount = await merkleMine.callerTokenAmountAtBlock(web3.eth.blockNumber + 1)
