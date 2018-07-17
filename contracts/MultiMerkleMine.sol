@@ -3,16 +3,23 @@ pragma solidity ^0.4.24;
 import "./MerkleMine.sol";
 import "zeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
-
 import "./BytesUtil.sol";
 
-
+/**
+ * @title MultiMerkleMine
+ * @dev The MultiMerkleMine contract is purely a convenience wrapper around an existing MerkleMine contract deployed on the blockchain.
+ */
 contract MultiMerkleMine {
 
 	using SafeMath for uint256;
 
-	event AlreadyGenerated(address indexed recipient, address indexed caller);
-
+	/**
+     * @dev Generates token allocations for multiple recipients. Generation period must be started.
+     * @param _merkleMineContract Address of the deployed MerkleMine contract
+     * @param _recipients Array of recipients
+     * @param _merkleProofs Proofs for respective reciepients contructed in the format: 
+     *       [proof_1_size, proof_1, proof_2_size, proof_2, ... , proof_n_size, proof_n]
+     */
 	function multiGenerate(address _merkleMineContract, address[] _recipients, bytes _merkleProofs) public {
 		MerkleMine mine = MerkleMine(_merkleMineContract);
 		ERC20 token = ERC20(mine.token());
@@ -37,8 +44,6 @@ contract MultiMerkleMine {
 		for(uint256 k=0; k < _recipients.length; k++){
 			if(!mine.generated(_recipients[k])){
 				mine.generate(_recipients[k], _proofs[k]);
-			}else{
-				emit AlreadyGenerated(_recipients[k], msg.sender);
 			}
 		}
 

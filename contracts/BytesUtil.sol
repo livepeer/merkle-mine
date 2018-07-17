@@ -39,10 +39,7 @@ library BytesUtil{
     // the 'len bytes starting at 'addr' will be copied into that new memory.
     function toBytes(uint256 addr, uint256 len) internal pure returns (bytes memory bts) {
         bts = new bytes(len);
-        uint256 btsptr;
-        assembly {
-            btsptr := add(bts, /*BYTES_HEADER_SIZE*/ 32)
-        }
+        uint256 btsptr = dataPtr(bts);
         copy(addr, btsptr, len);
     }
     

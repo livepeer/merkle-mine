@@ -6,9 +6,8 @@ const MerkleTree = require("../utils/merkleTree.js")
 const MultiMerkleMine = artifacts.require("MultiMerkleMine")
 const MerkleMine = artifacts.require("MerkleMine")
 const TestToken = artifacts.require("TestToken")
-const UnsafeTestToken = artifacts.require("UnsafeTestToken")
 
-contract("multiMerkleMine", accounts => {
+contract("MultiMerkleMine", accounts => {
 
 	const TOTAL_GENESIS_TOKENS = 10000000
 	const TOTAL_GENESIS_RECIPIENTS = accounts.length
