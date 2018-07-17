@@ -79,6 +79,18 @@ module.exports = class MerkleTree {
         return this.bufArrToHex(proof)
     }
 
+    getExtendedHexProof (elems){
+        let proof='', i=0
+        let elem
+
+        for(i=0; i<elems.length; i++){
+            elem = this.getProof(elems[i])
+            proof=proof+(this.extendedBufArrToHex(elem))
+        }
+
+        return '0x'+ proof
+    }
+
     getPairElement (idx, layer) {
         const pairIdx = idx % 2 === 0 ? idx + 1 : idx - 1
 
@@ -114,6 +126,18 @@ module.exports = class MerkleTree {
         }
 
         return '0x' + arr.map(el => el.toString('hex')).join('')
+    }
+
+    extendedBufArrToHex(arr){
+        let hexString
+
+        if (arr.some(el => !Buffer.isBuffer(el))) {
+            throw new Error('Array is not an array of buffers')
+        }
+
+        hexString = arr.map(el => el.toString('hex')).join('')
+
+        return ((hexString.length)/2).toString(16) + hexString
     }
 
     sortAndConcat (...args) {
