@@ -1,20 +1,36 @@
 pragma solidity ^0.4.24;
 
+
+/**
+ * @title BytesUtil
+ * @dev Utilities for extracting bytes from byte arrays
+ * Functions taken from:
+ * - https://github.com/ethereum/solidity-examples/blob/master/src/unsafe/Memory.sol
+ * - https://github.com/ethereum/solidity-examples/blob/master/src/bytes/Bytes.sol
+ */
 library BytesUtil{
-    uint internal constant BYTES_HEADER_SIZE = 32;
-    uint internal constant WORD_SIZE = 32;
+    uint256 internal constant BYTES_HEADER_SIZE = 32;
+    uint256 internal constant WORD_SIZE = 32;
     
-    // Returns a memory pointer to the data portion of the provided bytes array.
+    /**
+     * @dev Returns a memory pointer to the data portion of the provided bytes array.
+     * @param bts Memory byte array
+     */
     function dataPtr(bytes memory bts) internal pure returns (uint256 addr) {
         assembly {
             addr := add(bts, /*BYTES_HEADER_SIZE*/ 32)
         }
     }
     
-    // Copy 'len' bytes from memory address 'src', to address 'dest'.
-    // This function does not check the or destination, it only copies
-    // the bytes.
-    function copy(uint src, uint dest, uint len) internal pure {
+    /**
+     * @dev Copy 'len' bytes from memory address 'src', to address 'dest'.
+     * This function does not check the or destination, it only copies
+     * the bytes.
+     * @param src Memory address of source byte array
+     * @param dest Memory address of destination byte array
+     * @param len Number of bytes to copy from `src` to `dest`
+     */
+    function copy(uint256 src, uint256 dest, uint256 len) internal pure {
         // Copy word-length chunks while possible
         for (; len >= WORD_SIZE; len -= WORD_SIZE) {
             assembly {
@@ -25,7 +41,7 @@ library BytesUtil{
         }
 
         // Copy remaining bytes
-        uint mask = 256 ** (WORD_SIZE - len) - 1;
+        uint256 mask = 256 ** (WORD_SIZE - len) - 1;
         assembly {
             let srcpart := and(mload(src), not(mask))
             let destpart := and(mload(dest), mask)
@@ -33,22 +49,30 @@ library BytesUtil{
         }
     }
 
-    
-    // Creates a 'bytes memory' variable from the memory address 'addr', with the
-    // length 'len'. The function will allocate new memory for the bytes array, and
-    // the 'len bytes starting at 'addr' will be copied into that new memory.
+    /**
+     * @dev Creates a 'bytes memory' variable from the memory address 'addr', with the
+     * length 'len'. The function will allocate new memory for the bytes array, and
+     * the 'len bytes starting at 'addr' will be copied into that new memory.
+     * @param addr Memory address of input byte array
+     * @param len Number of bytes to copy from input byte array
+     */
     function toBytes(uint256 addr, uint256 len) internal pure returns (bytes memory bts) {
         bts = new bytes(len);
         uint256 btsptr = dataPtr(bts);
         copy(addr, btsptr, len);
     }
     
-    // Copies 'len' bytes from 'self' into a new array, starting at the provided 'startIndex'.
-    // Returns the new copy.
-    // Requires that:
-    //  - 'startIndex + len <= self.length'
-    // The length of the substring is: 'len'
-    function substr(bytes memory self, uint startIndex, uint len) internal pure returns (bytes memory) {
+    /**
+     * @dev Copies 'len' bytes from 'self' into a new array, starting at the provided 'startIndex'.
+     * Returns the new copy.
+     * Requires that:
+     *  - 'startIndex + len <= self.length'
+     * The length of the substring is: 'len'
+     * @param self Memory byte array to copy from
+     * @param startIndex Index of `self` to start copying bytes from
+     * @param len Number of bytes to copy from `self`
+     */
+    function substr(bytes memory self, uint256 startIndex, uint256 len) internal pure returns (bytes memory) {
         require(startIndex + len <= self.length);
         if (len == 0) {
             return;
