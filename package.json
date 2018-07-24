@@ -26,8 +26,8 @@
     "yargs": "^11.0.0"
   },
   "devDependencies": {
-    "ganache-cli": "^6.1.0",
-    "truffle": "^4.1.5",
+    "ganache-cli": "^6.1.6",
+    "truffle": "^4.1.13",
     "truffle-keystore-provider": "^1.0.1",
     "zeppelin-solidity": "1.8.0"
   },

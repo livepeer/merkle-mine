@@ -63,21 +63,38 @@ library BytesUtil{
     }
     
     /**
-     * @dev Copies 'len' bytes from 'self' into a new array, starting at the provided 'startIndex'.
+     * @dev Copies 'len' bytes from 'bts' into a new array, starting at the provided 'startIndex'.
      * Returns the new copy.
      * Requires that:
      *  - 'startIndex + len <= self.length'
      * The length of the substring is: 'len'
-     * @param self Memory byte array to copy from
-     * @param startIndex Index of `self` to start copying bytes from
-     * @param len Number of bytes to copy from `self`
+     * @param bts Memory byte array to copy from
+     * @param startIndex Index of `bts` to start copying bytes from
+     * @param len Number of bytes to copy from `bts`
      */
-    function substr(bytes memory self, uint256 startIndex, uint256 len) internal pure returns (bytes memory) {
-        require(startIndex + len <= self.length);
+    function substr(bytes memory bts, uint256 startIndex, uint256 len) internal pure returns (bytes memory) {
+        require(startIndex + len <= bts.length);
         if (len == 0) {
             return;
         }
-        uint256 addr = dataPtr(self);
+        uint256 addr = dataPtr(bts);
         return toBytes(addr + startIndex, len);
+    }
+
+    /**
+     * @dev Reads a bytes32 value from a byte array by copying 32 bytes from `bts` starting at the provided `startIndex`.
+     * @param bts Memory byte array to copy from
+     * @param startIndex Index of `bts` to start copying bytes from
+     */
+    function readBytes32(bytes memory bts, uint256 startIndex) internal pure returns (bytes32 result) {
+        require(startIndex + 32 <= bts.length);
+
+        uint256 addr = dataPtr(bts);
+
+        assembly {
+            result := mload(add(addr, startIndex))
+        }
+
+        return result;
     }
 }
