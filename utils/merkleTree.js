@@ -1,4 +1,4 @@
-const { sha3, bufferToHex } = require("ethereumjs-util")
+const { sha3, bufferToHex, bufferToInt, setLengthLeft } = require("ethereumjs-util")
 
 // Based on:
 // https://github.com/ameensol/merkle-tree-solidity/blob/master/js/merkle.js
@@ -79,16 +79,12 @@ module.exports = class MerkleTree {
         return this.bufArrToHex(proof)
     }
 
-    getExtendedHexProof (elems){
-        let proof='', i=0
-        let elem
-
-        for(i=0; i<elems.length; i++){
-            elem = this.getProof(elems[i])
-            proof=proof+(this.extendedBufArrToHex(elem))
-        }
-
-        return '0x'+ proof
+    getHexBatchProofs (els) {
+        return '0x' + els.map(el => {
+            // Strip 0x
+            const hexProof = this.getHexProof(el).slice(2)
+            return setLengthLeft(hexProof.length / 2, 32).toString('hex') + hexProof
+        }).join('')
     }
 
     getPairElement (idx, layer) {
@@ -128,18 +124,6 @@ module.exports = class MerkleTree {
         return '0x' + arr.map(el => el.toString('hex')).join('')
     }
 
-    extendedBufArrToHex(arr){
-        let hexString
-
-        if (arr.some(el => !Buffer.isBuffer(el))) {
-            throw new Error('Array is not an array of buffers')
-        }
-
-        hexString = arr.map(el => el.toString('hex')).join('')
-
-        return ((hexString.length)/2).toString(16) + hexString
-    }
-
     sortAndConcat (...args) {
         return Buffer.concat([...args].sort(Buffer.compare))
     }
@@ -150,6 +134,23 @@ module.exports = class MerkleTree {
         }
 
         return this.layers[0].length
+    }
+
+    extractProofsFromBatch (hexBatchProofs) {
+        const data = Buffer.from(hexBatchProofs.slice(2), "hex")
+
+        let proofs = []
+        let i = 0
+
+        while (i < data.length) {
+            const proofSize = bufferToInt(data.slice(i, i + 32))
+
+            proofs.push(data.slice(i + 32, i + 32 + proofSize))
+
+            i += (proofSize + 32)
+        }
+
+        return proofs
     }
 
     verifyProof (el, proof) {
